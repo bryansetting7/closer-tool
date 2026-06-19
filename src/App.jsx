@@ -6,46 +6,39 @@ const RED = "#FF6584";
 
 const SYSTEM_PROMPT = `Tu es un expert en closing et en vente pour des coachs fitness/perte de poids sur Instagram.
 
-Bryan est un closer freelance qui cherche à collaborer avec des coachs fitness/perte de poids sur Instagram. Il travaille à la commission (10%), propose une période test de 30 jours sans engagement, et a un background fitness personnel ce qui lui donne de la crédibilité dans cette niche.
+Bryan est un closer freelance qui cherche à collaborer avec des coachs fitness/perte de poids sur Instagram. Il travaille à la commission (10%), propose une période test de 30 jours sans engagement, et a un background fitness personnel. Il CLOSE UNIQUEMENT LES APPELS DÉJÀ BOOKÉS — il ne gère pas les DMs, pas le setting, uniquement les calls de vente.
 
-IMPORTANT sur le ticket estimé : les coachs fitness n'affichent presque jamais leurs prix. Tu dois estimer le ticket moyen en te basant sur la taille de l'audience, le type d'offre, le positionnement, la cible et les CTA visibles. Donne une fourchette réaliste ex: "500-900€".
+Les coachs fitness n'affichent presque jamais leurs prix. Estime le ticket en fonction de l'audience, du type d'offre, du positionnement et des CTAs visibles.
 
-À partir des informations d'un profil de coach Instagram, génère un kit de prospection complet et personnalisé EN FRANÇAIS.
+Génère un kit de prospection complet EN FRANÇAIS. Réponds UNIQUEMENT avec du JSON brut, sans texte avant ni après, sans backticks.
 
-Réponds UNIQUEMENT avec un objet JSON valide. Pas de texte avant, pas de texte après, pas de backticks markdown. Juste le JSON brut commençant par { et finissant par }.
-
-Format :
 {
   "analyse": {
-    "nom": "prénom ou nom du coach",
+    "nom": "prénom du coach",
     "type_offre": "type d'offre identifié",
-    "ticket_estime": "fourchette estimée + justification courte",
-    "signal_opportunite": "signal principal qui indique qu'il a besoin d'un closer",
-    "point_fort_niche": "pourquoi ce coach est intéressant pour une collaboration"
+    "ticket_estime": "fourchette ex: 500-900€ + justification courte",
+    "signal_opportunite": "pourquoi ce coach a besoin d'un closer",
+    "point_fort": "pourquoi c'est une bonne cible pour Bryan"
   },
   "messages": {
-    "icebreaker_a": "message d'accroche version A, court, naturel, 1 question, pas de pitch",
-    "icebreaker_b": "message d'accroche version B avec angle différent",
-    "qualification": "question de suivi après une première réponse",
-    "pitch": "pitch closer complet après qualification"
+    "icebreaker_a": "message d'accroche version A, court, naturel, 1 question, zéro pitch",
+    "icebreaker_b": "message d'accroche version B angle différent",
+    "qualification": "question après première réponse pour savoir s'il fait des calls de vente",
+    "pitch": "pitch closer : Bryan close les appels déjà bookés, commission 10%, période test 30j"
   },
   "objections": [
-    { "objection": "objection 1 probable", "reponse": "réponse personnalisée" },
-    { "objection": "objection 2 probable", "reponse": "réponse personnalisée" },
-    { "objection": "objection 3 probable", "reponse": "réponse personnalisée" }
+    { "objection": "objection probable 1", "reponse": "réponse personnalisée" },
+    { "objection": "objection probable 2", "reponse": "réponse personnalisée" },
+    { "objection": "objection probable 3", "reponse": "réponse personnalisée" }
   ],
-  "script_call": "script d'ouverture de call complet pour Bryan",
-  "periode_test": "proposition structurée de la période test pour ce coach"
+  "script_call": "script d'ouverture de call complet pour Bryan quand le coach accepte de parler",
+  "periode_test": "proposition structurée 30 jours adaptée à ce coach"
 }`;
 
 function Spinner() {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:14, padding:"52px 0" }}>
-      <div style={{
-        width:34, height:34, borderRadius:"50%",
-        border:"3px solid #1E1E2E", borderTopColor:ACCENT,
-        animation:"spin 0.8s linear infinite"
-      }}/>
+      <div style={{ width:34, height:34, borderRadius:"50%", border:"3px solid #1E1E2E", borderTopColor:ACCENT, animation:"spin 0.8s linear infinite" }}/>
       <span style={{ fontFamily:"monospace", fontSize:11, color:"#7070A0", letterSpacing:"0.12em" }}>GÉNÉRATION...</span>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
@@ -55,9 +48,9 @@ function Spinner() {
 function CopyBtn({ text }) {
   const [ok, setOk] = useState(false);
   const copy = () => {
-    try {
-      navigator.clipboard.writeText(text).then(() => { setOk(true); setTimeout(() => setOk(false), 2000); });
-    } catch {
+    navigator.clipboard.writeText(text).then(() => {
+      setOk(true); setTimeout(() => setOk(false), 2000);
+    }).catch(() => {
       const el = document.createElement("textarea");
       el.value = text;
       el.style.cssText = "position:fixed;top:-999px";
@@ -67,7 +60,7 @@ function CopyBtn({ text }) {
       document.body.removeChild(el);
       setOk(true);
       setTimeout(() => setOk(false), 2000);
-    }
+    });
   };
   return (
     <button onClick={copy} style={{
@@ -149,7 +142,7 @@ const TABS = [
 
 export default function App() {
   const [form, setForm] = useState({ nom:"", abonnes:"", offre:"", cta:"", notes:"" });
-  const [step, setStep] = useState("form"); // form | loading | result | error
+  const [step, setStep] = useState("form");
   const [result, setResult] = useState(null);
   const [errMsg, setErrMsg] = useState("");
   const [tab, setTab] = useState("msg");
@@ -171,67 +164,45 @@ export default function App() {
 - CTA : ${form.cta || "non précisé"}
 - Notes : ${form.notes || "aucune"}
 
-Génère le kit complet pour Bryan. Réponds uniquement avec le JSON brut, sans aucun texte autour.`;
+Génère le kit complet pour Bryan. JSON brut uniquement.`;
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/proxy", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "anthropic-version": "2023-06-01"
-        },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 4096,
-          messages: [{ role: "user", content: SYSTEM_PROMPT + "\n\n" + userMsg }]
+          messages: [
+            { role: "user", content: SYSTEM_PROMPT + "\n\n" + userMsg }
+          ]
         })
       });
 
-      const responseText = await response.text();
-      setErrMsg("HTTP " + response.status + " | " + responseText.slice(0, 400));
-      
+      const data = await response.json();
+
       if (!response.ok) {
+        setErrMsg("Erreur " + response.status + " : " + (data.error || JSON.stringify(data)).slice(0, 200));
         setStep("error");
         return;
       }
 
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch(e) {
-        setErrMsg("JSON parse fail: " + responseText.slice(0, 300));
-        setStep("error");
-        return;
-      }
-
-      if (data.error) {
-        setErrMsg("API error: " + (data.error.message || JSON.stringify(data.error)));
-        setStep("error");
-        return;
-      }
-      
-      // Clear debug message if all good
-      setErrMsg("");
-
-      const raw = (data.content || []).map(b => b.text || "").join("").trim();
+      // Groq returns OpenAI format: choices[0].message.content
+      const raw = data.choices?.[0]?.message?.content?.trim();
 
       if (!raw) {
-        setErrMsg("Réponse vide. data=" + JSON.stringify(data).slice(0,150));
+        setErrMsg("Réponse vide. " + JSON.stringify(data).slice(0, 150));
         setStep("error");
         return;
       }
 
-      // Extract JSON robustly
       const start = raw.indexOf("{");
       const end = raw.lastIndexOf("}");
       if (start === -1 || end === -1) {
-        setErrMsg("JSON introuvable. Brut: " + raw.slice(0, 200));
+        setErrMsg("JSON introuvable : " + raw.slice(0, 150));
         setStep("error");
         return;
       }
 
-      const jsonStr = raw.slice(start, end + 1);
-      const parsed = JSON.parse(jsonStr);
+      const parsed = JSON.parse(raw.slice(start, end + 1));
       setResult(parsed);
       setTab("msg");
       setStep("result");
@@ -247,18 +218,16 @@ Génère le kit complet pour Bryan. Réponds uniquement avec le JSON brut, sans 
   return (
     <div style={{ minHeight:"100vh", background:"#0A0A0F", color:"#E8E8F0", fontFamily:"'Space Grotesk',system-ui,sans-serif", paddingBottom:60 }}>
 
-      {/* HEADER */}
       <div style={{ maxWidth:680, margin:"0 auto", padding:"36px 20px 24px", borderBottom:"1px solid #1E1E2E" }}>
         <div style={{ fontFamily:"monospace", fontSize:10, letterSpacing:"0.2em", color:ACCENT, textTransform:"uppercase", marginBottom:10 }}>Closer Tool · Bryan · 2026</div>
         <h1 style={{ fontSize:"clamp(20px,4vw,32px)", fontWeight:700, color:"#fff", lineHeight:1.2, marginBottom:8 }}>
           Kit prospection<br/><span style={{ color:PURPLE }}>closer fitness</span>
         </h1>
-        <p style={{ fontSize:13.5, color:"#7070A0", maxWidth:460 }}>Remplis les infos visibles sur le profil — messages personnalisés, objections et script de call générés en secondes.</p>
+        <p style={{ fontSize:13.5, color:"#7070A0", maxWidth:460 }}>Remplis les infos visibles sur le profil — messages, objections et script de call générés en secondes.</p>
       </div>
 
       <div style={{ maxWidth:680, margin:"0 auto", padding:"0 20px" }}>
 
-        {/* ── FORM ── */}
         {(step === "form" || step === "error") && (
           <div style={{ marginTop:28 }}>
             <div style={{ background:"#111118", border:"1px solid #1E1E2E", borderRadius:10, padding:"20px 18px" }}>
@@ -277,18 +246,18 @@ Génère le kit complet pour Bryan. Réponds uniquement avec le JSON brut, sans 
 
               <div style={{ marginBottom:12 }}>
                 <label style={lStyle}>Son offre <span style={{ color:RED }}>*</span></label>
-                <textarea style={{ ...iStyle, minHeight:76 }} placeholder="Coaching nutrition + sport suivi 3 mois, programme perte de poids femmes..." value={form.offre} onChange={set("offre")} onFocus={fon} onBlur={fin}/>
-                <div style={{ fontFamily:"monospace", fontSize:10, color:"#555580", marginTop:4 }}>Prix non nécessaire — l'IA l'estime automatiquement</div>
+                <textarea style={{ ...iStyle, minHeight:76 }} placeholder="Coaching nutrition + sport suivi 3 mois, programme perte de poids hommes..." value={form.offre} onChange={set("offre")} onFocus={fon} onBlur={fin}/>
+                <div style={{ fontFamily:"monospace", fontSize:10, color:"#555580", marginTop:4 }}>Prix non nécessaire — estimé automatiquement</div>
               </div>
 
               <div style={{ marginBottom:12 }}>
                 <label style={lStyle}>CTA visible (bio / stories)</label>
-                <input style={iStyle} placeholder={`"envoie RÉSULTAT en DM", lien Calendly...`} value={form.cta} onChange={set("cta")} onFocus={fon} onBlur={fin}/>
+                <input style={iStyle} placeholder={`"DM PRIME", lien Calendly...`} value={form.cta} onChange={set("cta")} onFocus={fon} onBlur={fin}/>
               </div>
 
               <div style={{ marginBottom:18 }}>
                 <label style={lStyle}>Notes (optionnel)</label>
-                <textarea style={{ ...iStyle, minHeight:56 }} placeholder="Cible femmes 30-45 ans, before/after réguliers, DMs actifs..." value={form.notes} onChange={set("notes")} onFocus={fon} onBlur={fin}/>
+                <textarea style={{ ...iStyle, minHeight:56 }} placeholder="Cible hommes 30+, before/after réguliers, très actif en stories..." value={form.notes} onChange={set("notes")} onFocus={fon} onBlur={fin}/>
               </div>
 
               {(errMsg || step === "error") && (
@@ -308,22 +277,18 @@ Génère le kit complet pour Bryan. Réponds uniquement avec le JSON brut, sans 
           </div>
         )}
 
-        {/* ── LOADING ── */}
         {step === "loading" && <Spinner/>}
 
-        {/* ── RESULT ── */}
         {step === "result" && result && (
           <div style={{ marginTop:24 }}>
-
             <Card title="Analyse du profil" tag="AUTO">
               <Row label="Coach" value={result.analyse?.nom || form.nom || "—"}/>
               <Row label="Offre" value={result.analyse?.type_offre || "—"}/>
               <Row label="Ticket estimé" value={result.analyse?.ticket_estime || "—"}/>
               <Row label="Opportunité" value={result.analyse?.signal_opportunite || "—"}/>
-              <Row label="Intérêt" value={result.analyse?.point_fort_niche || "—"}/>
+              <Row label="Intérêt" value={result.analyse?.point_fort || "—"}/>
             </Card>
 
-            {/* TABS */}
             <div style={{ display:"flex", borderBottom:"1px solid #1E1E2E", marginBottom:14, overflowX:"auto" }}>
               {TABS.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)} style={{
