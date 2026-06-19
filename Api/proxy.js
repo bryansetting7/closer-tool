@@ -1,9 +1,15 @@
-export default async function handler(req, res) {
+export const config = {
+  runtime: 'edge',
+};
+
+export default async function handler(req) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   }
 
   try {
+    const body = await req.json();
+    
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -12,15 +18,18 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
-        messages: req.body.messages,
+        messages: body.messages,
         max_tokens: 4096,
         temperature: 0.7,
       }),
     });
 
     const data = await response.json();
-    res.status(response.status).json(data);
+    return new Response(JSON.stringify(data), {
+      status: response.status,
+      headers: { "content-type": "application/json" }
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 }
