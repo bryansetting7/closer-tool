@@ -1,5 +1,5 @@
 {
-  "rewrites": [
-    { "source": "/api/proxy", "destination": "/api/proxy" }
-  ]
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite"
 }
